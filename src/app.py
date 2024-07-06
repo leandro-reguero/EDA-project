@@ -5,7 +5,11 @@ file = 'https://raw.githubusercontent.com/4GeeksAcademy/data-preprocessing-proje
 df_raw = pd.read_csv(file)
 
 
-df = df_raw.drop(['name', 'host_name', 'last_review', 'reviews_per_month', 'id', 'host_id'], axis=1)
-print(df.head)
+df2 = df_raw.drop(['name', 'host_name', 'last_review', 'reviews_per_month', 'id', 'host_id'], axis=1)
+print(df2.head)
 print("too many zeros in 'availability_365' observed, and no correlation with price seen. Suggesting to drop")
 print("same with 'number_of_reviews'")
+df = df2.drop(['availability_365', 'number_of_reviews'], axis=1)
+print(df.head())
+
+print()
