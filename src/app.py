@@ -5,6 +5,7 @@ import seaborn as sns
 
 # modelado
 from sklearn.model_selection import train_test_split
+from sklearn.feature_selection import chi2, f_classif, SelectKBest
 
 # escalado
 from sklearn.preprocessing import StandardScaler
@@ -153,10 +154,16 @@ df = df[df['calculated_host_listings_count'] > 0]
 # find missing values
 print(df.isnull().sum())
 
-
-
-
 # Now we have reduced dataset, we want to scale and model it
+
+# The column 'neighbourhood' has a lot of categories, so we will apply label encoding for it
+# but first, (as you can see in the notebook file) I have dropped neighbourhoods containing less than 30 houses
+# so that we dont have neighbourhoods not appearing on one side of the split
+x = 28
+neighbourhoods_counts = df['neighbourhood'].value_counts()
+bigger_nh = neighbourhoods_counts[neighbourhoods_counts >= x].index
+df = df[df['neighbourhood'].isin(bigger_nh)]
+
 # We split the set for train and test 
 X = df.drop("price", axis = 1)
 y = df['price']
@@ -171,34 +178,59 @@ scaler.fit(X_train[num_variables])
 # apply scaler on both sides of our dataset and convert to dataset (since scaler returns array)
 X_train_num_scal = scaler.transform(X_train[num_variables])
 X_train_num_scal = pd.DataFrame(X_train_num_scal, index=X_train.index, columns=num_variables)
+X_train[num_variables] = X_train_num_scal
 
 X_test_num_scal = scaler.transform(X_test[num_variables])
 X_test_num_scal = pd.DataFrame(X_test_num_scal, index=X_test.index, columns=num_variables)
+X_test[num_variables] = X_test_num_scal
+print("")
+print("This is how our num_var scaled df looks life")
+print(X_train.head(10))
 
-print(X_train_num_scal.head(10))
+
 
 # Now we codify the categorical variables
 
 cat_variables = ['neighbourhood_group', 'neighbourhood', 'room_type']
 
-# The column 'neighbourhood' has a lot of categories, so we will apply label encoding for it
-# but first, (as you can see in the notebook file) I have dropped neighbourhoods containing less than 30 houses
-# so that we dont have neighbourhoods not appearing on one side of the split
-x = 28
-neighbourhoods_counts = df['neighbourhood'].value_counts()
-bigger_nh = neighbourhoods_counts[neighbourhoods_counts >= x].index
-nh_filtered_df = df[df['neighbourhood'].isin(bigger_nh)]
-
-
 X_train_cat_le = X_train.copy()
 X_test_cat_le = X_test.copy()
 
 # starting the encoder
-label_encoder_neighbourhood = LabelEncoder()
-label_encoder_neighbourhood.fit(X_train['neighbourhood'])
+label_encoder_neighbourhood = OrdinalEncoder()
+label_encoder_neighbourhood.fit(pd.DataFrame(X_train['neighbourhood']))
 
 # apply the encoder
-X_train_cat_le['neighbourhood_le'] = label_encoder_neighbourhood.transform(X_train['neighbourhood'])
-X_test_cat_le['neighbourhood_le'] = label_encoder_neighbourhood.transform(X_test['neighbourhood'])
+X_train_cat_le['neighbourhood_le'] = label_encoder_neighbourhood.transform(pd.DataFrame(X_train['neighbourhood']))
+X_test_cat_le['neighbourhood_le'] = label_encoder_neighbourhood.transform(pd.DataFrame(X_test['neighbourhood']))
 
-print(X_train_cat_le.head(10))
+X_train['neighbourhood'] = X_train_cat_le['neighbourhood_le']
+X_test['neighbourhood'] = X_test_cat_le['neighbourhood_le']
+
+
+print("")
+print("This is how our encoded cat_var + num_scaled training df looks like")
+print(X_train.head(10))
+
+# Now i want to choose the most useful predictors / the best features:
+# we have 9 predictors, I want to drop 3, so keep 6 (k=6)
+selection_model = SelectKBest(score_func = f_classif, k = 6)
+
+# now we train the model
+selection_model.fit(X_train, y_train)
+
+ix = selection_model.get_support()
+X_train_sel = pd.DataFrame(selection_model.transform(X_train), columns = X_train.columns.values[ix])
+X_test_sel = pd.DataFrame(selection_model.transform(X_test), columns = X_test.columns.values[ix])
+
+print("")
+print("These are the most useful features: ")
+print(X_train_sel.head())
+
+
+# Now i want to save the clean data
+X_train_sel["price"] = list(y_train)
+X_test_sel["price"] = list(y_test)
+
+X_train_sel.to_csv("EDA-project/data/processed/clean_train.csv")
+X_test_sel.to_csv("EDA-project/data/processed/clean_test.csv")
